@@ -71,6 +71,10 @@
             border: 1px solid rgba(255,255,255,0.2);
             min-width: 200px;
         }
+        
+        .pomodoro-display {
+            font-size: 4rem;
+        }
 
         input {
             padding: 15px;
@@ -156,7 +160,7 @@
 </head>
 <body>
     <div class="orientation-indicator" id="orientation-debug">Detecting...</div>
-
+    
     <div class="app-container">
         <div id="initial-message" class="feature-section active">
             <div class="initial-message">
@@ -167,6 +171,7 @@
                 <p>📱 Landscape Right → Stopwatch</p>
                 <p>🙃 Portrait Down → Timer</p>
                 <p>📱 Landscape Left → Weather</p>
+                <p>⬇️ Face Up (on a table) → **Bonus Pomodoro**</p>
                 <button id="start-app-btn">Start</button>
             </div>
         </div>
@@ -193,12 +198,20 @@
             <button id="start-timer-btn">Start</button>
             <button id="reset-timer-btn">Reset</button>
         </div>
-
+        
         <div id="weather-display" class="feature-section">
             <h2>🌤️ Weather</h2>
             <div id="weather-content" class="weather-content">
                 <p>Loading weather...</p>
             </div>
+        </div>
+
+        <div id="pomodoro" class="feature-section">
+            <h2>🍅 Pomodoro Timer</h2>
+            <div class="display pomodoro-display" id="pomodoro-display">25:00</div>
+            <div class="status" id="pomodoro-status">Work Session</div>
+            <button id="start-pomodoro-btn">Start</button>
+            <button id="reset-pomodoro-btn">Reset</button>
         </div>
     </div>
 
@@ -211,6 +224,7 @@
             const stopwatch = document.getElementById('stopwatch');
             const timer = document.getElementById('timer');
             const weatherDisplay = document.getElementById('weather-display');
+            const pomodoro = document.getElementById('pomodoro');
             const orientationDebug = document.getElementById('orientation-debug');
 
             // Alarm Clock elements
@@ -226,7 +240,7 @@
             let stopwatchInterval;
             let stopwatchTime = 0;
             let isStopwatchRunning = false;
-
+            
             // Timer elements
             const timerDisplay = document.getElementById('timer-display');
             const timerMinutesInput = document.getElementById('timer-minutes');
@@ -235,6 +249,18 @@
             let timerInterval;
             let timerDuration;
             let isTimerRunning = false;
+
+            // Pomodoro elements
+            const pomodoroDisplay = document.getElementById('pomodoro-display');
+            const pomodoroStatus = document.getElementById('pomodoro-status');
+            const startPomodoroBtn = document.getElementById('start-pomodoro-btn');
+            const resetPomodoroBtn = document.getElementById('reset-pomodoro-btn');
+            const WORK_DURATION = 25 * 60; // 25 minutes
+            const BREAK_DURATION = 5 * 60;  // 5 minutes
+            let pomodoroInterval;
+            let pomodoroTime = WORK_DURATION;
+            let isPomodoroRunning = false;
+            let isWorkSession = true;
 
             // Weather API
             const WEATHER_API_KEY = "20540bfb70f5c03fec99ad5d4a37783b";
@@ -273,38 +299,53 @@
                 return 'unknown';
             }
 
-            function detectOrientation() {
-                const orientation = getOrientation();
-                console.log('Detected orientation:', orientation);
-                orientationDebug.textContent = `Orientation: ${orientation}`;
+            function isFaceUp(beta, gamma) {
+                // Beta is the front-to-back tilt, Gamma is the left-to-right tilt
+                // A device lying flat on a table will have a beta close to 90 and gamma close to 0.
+                const isBetaFlat = (beta > 80 && beta < 100);
+                const isGammaFlat = (gamma > -10 && gamma < 10);
+                return isBetaFlat && isGammaFlat;
+            }
 
-                if (orientation !== 'unknown' && orientation !== lastOrientation) {
-                    console.log('Switching from', lastOrientation, 'to', orientation);
-                    lastOrientation = orientation;
-                    updateUI(orientation);
+            function detectOrientation(event) {
+                const orientation = getOrientation();
+                const beta = event ? event.beta : 0;
+                const gamma = event ? event.gamma : 0;
+                const alpha = event ? event.alpha : 0;
+
+                let currentOrientation = orientation;
+                if (window.DeviceOrientationEvent && isFaceUp(beta, gamma)) {
+                    currentOrientation = 'face-up';
+                }
+                
+                console.log('Detected orientation:', currentOrientation);
+                orientationDebug.textContent = `Orientation: ${currentOrientation}`;
+                
+                if (currentOrientation !== 'unknown' && currentOrientation !== lastOrientation) {
+                    console.log('Switching from', lastOrientation, 'to', currentOrientation);
+                    lastOrientation = currentOrientation;
+                    updateUI(currentOrientation);
                 }
             }
 
             function attachOrientationListeners() {
-                // Screen Orientation API
                 if (screen.orientation) {
                     screen.orientation.addEventListener('change', () => {
                         clearTimeout(orientTimer);
                         orientTimer = setTimeout(detectOrientation, ORIENT_DEBOUNCE);
                     });
                 }
-
-                // Legacy orientation change
                 window.addEventListener('orientationchange', () => {
                     clearTimeout(orientTimer);
                     orientTimer = setTimeout(detectOrientation, ORIENT_DEBOUNCE);
                 });
-
-                // Resize as fallback
                 window.addEventListener('resize', () => {
                     clearTimeout(orientTimer);
                     orientTimer = setTimeout(detectOrientation, ORIENT_DEBOUNCE);
                 });
+                if (window.DeviceOrientationEvent) {
+                    window.addEventListener('deviceorientation', detectOrientation, true);
+                }
             }
 
             function hideAllFeatures() {
@@ -315,9 +356,9 @@
 
             function updateUI(orientation) {
                 hideAllFeatures();
-
-                // Stop all running timers when switching
+                
                 stopStopwatch();
+                stopPomodoro();
                 stopTimer();
                 if (alarmTimeout) clearTimeout(alarmTimeout);
 
@@ -335,33 +376,31 @@
                         weatherDisplay.classList.add('active');
                         fetchWeather();
                         break;
+                    case 'face-up':
+                        pomodoro.classList.add('active');
+                        break;
                     default:
                         initialMessage.classList.add('active');
                         break;
                 }
             }
-
+            
             // Alarm Clock functionality
             setAlarmBtn.addEventListener('click', () => {
                 if (!alarmTimeInput.value) {
                     alarmStatus.textContent = 'Please set a time!';
                     return;
                 }
-
                 const [hours, minutes] = alarmTimeInput.value.split(':').map(Number);
                 const now = new Date();
                 const alarm = new Date();
                 alarm.setHours(hours, minutes, 0, 0);
-
                 if (alarm.getTime() <= now.getTime()) {
                     alarm.setDate(alarm.getDate() + 1);
                 }
-
                 const timeToAlarm = alarm.getTime() - now.getTime();
                 alarmStatus.textContent = `Alarm set for ${alarmTimeInput.value}`;
-
                 if (alarmTimeout) clearTimeout(alarmTimeout);
-
                 alarmTimeout = setTimeout(() => {
                     alert('🔔 ALARM! Time to wake up!');
                     alarmStatus.textContent = 'Alarm triggered!';
@@ -408,7 +447,7 @@
             });
 
             resetStopwatchBtn.addEventListener('click', resetStopwatch);
-
+            
             // Timer functionality
             function updateTimer() {
                 if (timerDuration <= 0) {
@@ -417,13 +456,11 @@
                     timerDisplay.textContent = '00:00';
                     return;
                 }
-
                 const minutes = Math.floor(timerDuration / 60);
                 const seconds = timerDuration % 60;
                 timerDisplay.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
                 timerDuration--;
             }
-
             function startTimer() {
                 if (!isTimerRunning) {
                     const inputMinutes = parseInt(timerMinutesInput.value, 10);
@@ -431,7 +468,6 @@
                         alert('Please enter a valid number of minutes!');
                         return;
                     }
-
                     timerDuration = inputMinutes * 60;
                     updateTimer();
                     timerInterval = setInterval(updateTimer, 1000);
@@ -441,30 +477,79 @@
                     stopTimer();
                 }
             }
-
             function stopTimer() {
                 clearInterval(timerInterval);
                 isTimerRunning = false;
                 startTimerBtn.textContent = 'Start';
             }
-
             function resetTimer() {
                 stopTimer();
                 const minutes = parseInt(timerMinutesInput.value, 10) || 5;
                 timerDisplay.textContent = `${String(minutes).padStart(2, '0')}:00`;
                 timerDuration = 0;
             }
-
             startTimerBtn.addEventListener('click', startTimer);
             resetTimerBtn.addEventListener('click', resetTimer);
-
-            // Update timer display when input changes
             timerMinutesInput.addEventListener('input', () => {
                 if (!isTimerRunning) {
                     const minutes = parseInt(timerMinutesInput.value, 10) || 5;
                     timerDisplay.textContent = `${String(minutes).padStart(2, '0')}:00`;
                 }
             });
+
+            // Pomodoro Timer functionality
+            function formatTime(seconds) {
+                const min = Math.floor(seconds / 60);
+                const sec = seconds % 60;
+                return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+            }
+
+            function updatePomodoro() {
+                pomodoroTime--;
+                pomodoroDisplay.textContent = formatTime(pomodoroTime);
+                if (pomodoroTime <= 0) {
+                    if (isWorkSession) {
+                        alert("Time for a break! ☕️");
+                        pomodoroStatus.textContent = "Break Session";
+                        pomodoroTime = BREAK_DURATION;
+                    } else {
+                        alert("Break is over! Get back to work. 💪");
+                        pomodoroStatus.textContent = "Work Session";
+                        pomodoroTime = WORK_DURATION;
+                    }
+                    isWorkSession = !isWorkSession;
+                    pomodoroDisplay.textContent = formatTime(pomodoroTime);
+                }
+            }
+
+            function startPomodoro() {
+                if (!isPomodoroRunning) {
+                    pomodoroInterval = setInterval(updatePomodoro, 1000);
+                    isPomodoroRunning = true;
+                    startPomodoroBtn.textContent = 'Pause';
+                } else {
+                    stopPomodoro();
+                }
+            }
+
+            function stopPomodoro() {
+                if (isPomodoroRunning) {
+                    clearInterval(pomodoroInterval);
+                    isPomodoroRunning = false;
+                    startPomodoroBtn.textContent = 'Start';
+                }
+            }
+            
+            function resetPomodoro() {
+                stopPomodoro();
+                isWorkSession = true;
+                pomodoroTime = WORK_DURATION;
+                pomodoroDisplay.textContent = formatTime(pomodoroTime);
+                pomodoroStatus.textContent = "Work Session";
+            }
+
+            startPomodoroBtn.addEventListener('click', startPomodoro);
+            resetPomodoroBtn.addEventListener('click', resetPomodoro);
 
             // Weather functionality
             function fetchWeather() {
@@ -499,15 +584,13 @@
                 }
             }
 
-            // Function to handle the start button click
             function startApp() {
                 initialMessage.style.display = 'none';
                 attachOrientationListeners();
-                // Initial detection after a small delay
-                setTimeout(detectOrientation, 500);
+                setTimeout(() => detectOrientation(), 500);
+                startAppBtn.removeEventListener('click', startApp);
             }
 
-            // Add event listener to the start button
             startAppBtn.addEventListener('click', startApp);
         });
     </script>
