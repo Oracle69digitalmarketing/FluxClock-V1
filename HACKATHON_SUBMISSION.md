@@ -6,8 +6,7 @@ This document outlines the development journey of FluxClock, a mobile-first web 
 
 A working prototype can be deployed from the code in this repository to any static hosting service like Vercel, Netlify, or GitHub Pages.
 
-*   **URL:** [Link to your deployed application]
-
+*   **URL:** https://fluxclock-qfzpt85s6-oracle69.vercel.app/
 ## 2. Approach
 
 The problem was to create a mobile-friendly web application that changes its function based on the device's orientation. The core of the project was to create a seamless and intuitive user experience, where the device's rotation is the primary input method.
