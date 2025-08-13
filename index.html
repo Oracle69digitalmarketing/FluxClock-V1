@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>FluxClock</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .app-container {
+            width: 100%;
+            max-width: 400px;
+            padding: 20px;
+            text-align: center;
+            color: white;
+        }
+
+        .feature-section {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 70vh;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .feature-section.active {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        h2 {
+            font-size: 2rem;
+            margin-bottom: 20px;
+        }
+
+        .display {
+            font-size: 3rem;
+            font-weight: bold;
+            margin: 30px 0;
+            padding: 20px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+            min-width: 200px;
+        }
+
+        input {
+            padding: 15px;
+            font-size: 1.2rem;
+            border: none;
+            border-radius: 10px;
+            margin: 10px;
+            background: rgba(255,255,255,0.9);
+            color: #333;
+            touch-action: manipulation;
+        }
+
+        button {
+            padding: 15px 30px;
+            font-size: 1.1rem;
+            border: none;
+            border-radius: 10px;
+            margin: 10px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 2px solid rgba(255,255,255,0.3);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            touch-action: manipulation;
+        }
+
+        button:hover, button:active {
+            background: rgba(255,255,255,0.3);
+            transform: translateY(-2px);
+        }
+
+        .weather-content {
+            text-align: center;
+        }
+
+        .weather-content h3 {
+            font-size: 2rem;
+            margin-bottom: 15px;
+        }
+
+        .weather-content img {
+            width: 100px;
+            height: 100px;
+        }
+
+        .weather-content p {
+            font-size: 1.3rem;
+            margin: 10px 0;
+            text-transform: capitalize;
+        }
+
+        .status {
+            margin-top: 20px;
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .initial-message {
+            text-align: center;
+        }
+
+        .orientation-indicator {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 0.8rem;
+            z-index: 1000;
+        }
+
+        @media (orientation: landscape) {
+            .app-container {
+                max-width: 600px;
+            }
+            .display {
+                font-size: 4rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="orientation-indicator" id="orientation-debug">Detecting...</div>
+
+    <div class="app-container">
+        <div id="initial-message" class="feature-section active">
+            <div class="initial-message">
+                <h1>⚡ FluxClock</h1>
+                <p>Rotate your device to access different features:</p>
+                <br>
+                <p>📱 Portrait Up → Alarm Clock</p>
+                <p>📱 Landscape Right → Stopwatch</p>
+                <p>🙃 Portrait Down → Timer</p>
+                <p>📱 Landscape Left → Weather</p>
+                <button id="start-app-btn">Start</button>
+            </div>
+        </div>
+
+        <div id="alarm-clock" class="feature-section">
+            <h2>⏰ Alarm Clock</h2>
+            <input type="time" id="alarm-time" value="07:00">
+            <br>
+            <button id="set-alarm-btn">Set Alarm</button>
+            <div class="status" id="alarm-status">No alarm set</div>
+        </div>
+
+        <div id="stopwatch" class="feature-section">
+            <h2>⏱️ Stopwatch</h2>
+            <div class="display" id="stopwatch-display">00:00:00</div>
+            <button id="start-stopwatch-btn">Start</button>
+            <button id="reset-stopwatch-btn">Reset</button>
+        </div>
+
+        <div id="timer" class="feature-section">
+            <h2>⏲️ Timer</h2>
+            <input type="number" id="timer-minutes" value="5" min="1" max="60" placeholder="Minutes">
+            <div class="display" id="timer-display">05:00</div>
+            <button id="start-timer-btn">Start</button>
+            <button id="reset-timer-btn">Reset</button>
+        </div>
+
+        <div id="weather-display" class="feature-section">
+            <h2>🌤️ Weather</h2>
+            <div id="weather-content" class="weather-content">
+                <p>Loading weather...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // UI elements
+            const initialMessage = document.getElementById('initial-message');
+            const startAppBtn = document.getElementById('start-app-btn');
+            const alarmClock = document.getElementById('alarm-clock');
+            const stopwatch = document.getElementById('stopwatch');
+            const timer = document.getElementById('timer');
+            const weatherDisplay = document.getElementById('weather-display');
+            const orientationDebug = document.getElementById('orientation-debug');
+
+            // Alarm Clock elements
+            const alarmTimeInput = document.getElementById('alarm-time');
+            const setAlarmBtn = document.getElementById('set-alarm-btn');
+            const alarmStatus = document.getElementById('alarm-status');
+            let alarmTimeout;
+
+            // Stopwatch elements
+            const stopwatchDisplay = document.getElementById('stopwatch-display');
+            const startStopwatchBtn = document.getElementById('start-stopwatch-btn');
+            const resetStopwatchBtn = document.getElementById('reset-stopwatch-btn');
+            let stopwatchInterval;
+            let stopwatchTime = 0;
+            let isStopwatchRunning = false;
+
+            // Timer elements
+            const timerDisplay = document.getElementById('timer-display');
+            const timerMinutesInput = document.getElementById('timer-minutes');
+            const startTimerBtn = document.getElementById('start-timer-btn');
+            const resetTimerBtn = document.getElementById('reset-timer-btn');
+            let timerInterval;
+            let timerDuration;
+            let isTimerRunning = false;
+
+            // Weather API
+            const WEATHER_API_KEY = "20540bfb70f5c03fec99ad5d4a37783b";
+            const weatherContent = document.getElementById('weather-content');
+
+            // Orientation detection
+            let lastOrientation = null;
+            let orientTimer = null;
+            const ORIENT_DEBOUNCE = 300;
+
+            function getOrientation() {
+                // Try multiple methods for better compatibility
+                if (screen.orientation && screen.orientation.angle !== undefined) {
+                    const angle = screen.orientation.angle;
+                    if (angle === 0) return 'portrait-upright';
+                    if (angle === 90) return 'landscape-right';
+                    if (angle === 180) return 'portrait-upsidedown';
+                    if (angle === 270) return 'landscape-left';
+                }
+
+                // Fallback to window.orientation (legacy)
+                const angle = window.orientation;
+                if (angle === 0) return 'portrait-upright';
+                if (angle === 90) return 'landscape-right';
+                if (angle === 180 || angle === -180) return 'portrait-upsidedown';
+                if (angle === -90 || angle === 270) return 'landscape-left';
+
+                // CSS media query fallback
+                if (window.matchMedia("(orientation: portrait)").matches) {
+                    return 'portrait-upright';
+                }
+                if (window.matchMedia("(orientation: landscape)").matches) {
+                    return 'landscape-right';
+                }
+
+                return 'unknown';
+            }
+
+            function detectOrientation() {
+                const orientation = getOrientation();
+                console.log('Detected orientation:', orientation);
+                orientationDebug.textContent = `Orientation: ${orientation}`;
+
+                if (orientation !== 'unknown' && orientation !== lastOrientation) {
+                    console.log('Switching from', lastOrientation, 'to', orientation);
+                    lastOrientation = orientation;
+                    updateUI(orientation);
+                }
+            }
+
+            function attachOrientationListeners() {
+                // Screen Orientation API
+                if (screen.orientation) {
+                    screen.orientation.addEventListener('change', () => {
+                        clearTimeout(orientTimer);
+                        orientTimer = setTimeout(detectOrientation, ORIENT_DEBOUNCE);
+                    });
+                }
+
+                // Legacy orientation change
+                window.addEventListener('orientationchange', () => {
+                    clearTimeout(orientTimer);
+                    orientTimer = setTimeout(detectOrientation, ORIENT_DEBOUNCE);
+                });
+
+                // Resize as fallback
+                window.addEventListener('resize', () => {
+                    clearTimeout(orientTimer);
+                    orientTimer = setTimeout(detectOrientation, ORIENT_DEBOUNCE);
+                });
+            }
+
+            function hideAllFeatures() {
+                document.querySelectorAll('.feature-section').forEach(section => {
+                    section.classList.remove('active');
+                });
+            }
+
+            function updateUI(orientation) {
+                hideAllFeatures();
+
+                // Stop all running timers when switching
+                stopStopwatch();
+                stopTimer();
+                if (alarmTimeout) clearTimeout(alarmTimeout);
+
+                switch (orientation) {
+                    case 'portrait-upright':
+                        alarmClock.classList.add('active');
+                        break;
+                    case 'landscape-right':
+                        stopwatch.classList.add('active');
+                        break;
+                    case 'portrait-upsidedown':
+                        timer.classList.add('active');
+                        break;
+                    case 'landscape-left':
+                        weatherDisplay.classList.add('active');
+                        fetchWeather();
+                        break;
+                    default:
+                        initialMessage.classList.add('active');
+                        break;
+                }
+            }
+
+            // Alarm Clock functionality
+            setAlarmBtn.addEventListener('click', () => {
+                if (!alarmTimeInput.value) {
+                    alarmStatus.textContent = 'Please set a time!';
+                    return;
+                }
+
+                const [hours, minutes] = alarmTimeInput.value.split(':').map(Number);
+                const now = new Date();
+                const alarm = new Date();
+                alarm.setHours(hours, minutes, 0, 0);
+
+                if (alarm.getTime() <= now.getTime()) {
+                    alarm.setDate(alarm.getDate() + 1);
+                }
+
+                const timeToAlarm = alarm.getTime() - now.getTime();
+                alarmStatus.textContent = `Alarm set for ${alarmTimeInput.value}`;
+
+                if (alarmTimeout) clearTimeout(alarmTimeout);
+
+                alarmTimeout = setTimeout(() => {
+                    alert('🔔 ALARM! Time to wake up!');
+                    alarmStatus.textContent = 'Alarm triggered!';
+                }, timeToAlarm);
+            });
+
+            // Stopwatch functionality
+            function updateStopwatch() {
+                stopwatchTime++;
+                const h = String(Math.floor(stopwatchTime / 3600)).padStart(2, '0');
+                const m = String(Math.floor((stopwatchTime % 3600) / 60)).padStart(2, '0');
+                const s = String(stopwatchTime % 60).padStart(2, '0');
+                stopwatchDisplay.textContent = `${h}:${m}:${s}`;
+            }
+
+            function startStopwatch() {
+                if (!isStopwatchRunning) {
+                    stopwatchInterval = setInterval(updateStopwatch, 1000);
+                    isStopwatchRunning = true;
+                    startStopwatchBtn.textContent = 'Stop';
+                }
+            }
+
+            function stopStopwatch() {
+                if (isStopwatchRunning) {
+                    clearInterval(stopwatchInterval);
+                    isStopwatchRunning = false;
+                    startStopwatchBtn.textContent = 'Start';
+                }
+            }
+
+            function resetStopwatch() {
+                stopStopwatch();
+                stopwatchTime = 0;
+                stopwatchDisplay.textContent = '00:00:00';
+            }
+
+            startStopwatchBtn.addEventListener('click', () => {
+                if (isStopwatchRunning) {
+                    stopStopwatch();
+                } else {
+                    startStopwatch();
+                }
+            });
+
+            resetStopwatchBtn.addEventListener('click', resetStopwatch);
+
+            // Timer functionality
+            function updateTimer() {
+                if (timerDuration <= 0) {
+                    alert('⏰ TIMER FINISHED!');
+                    stopTimer();
+                    timerDisplay.textContent = '00:00';
+                    return;
+                }
+
+                const minutes = Math.floor(timerDuration / 60);
+                const seconds = timerDuration % 60;
+                timerDisplay.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                timerDuration--;
+            }
+
+            function startTimer() {
+                if (!isTimerRunning) {
+                    const inputMinutes = parseInt(timerMinutesInput.value, 10);
+                    if (inputMinutes <= 0) {
+                        alert('Please enter a valid number of minutes!');
+                        return;
+                    }
+
+                    timerDuration = inputMinutes * 60;
+                    updateTimer();
+                    timerInterval = setInterval(updateTimer, 1000);
+                    isTimerRunning = true;
+                    startTimerBtn.textContent = 'Pause';
+                } else {
+                    stopTimer();
+                }
+            }
+
+            function stopTimer() {
+                clearInterval(timerInterval);
+                isTimerRunning = false;
+                startTimerBtn.textContent = 'Start';
+            }
+
+            function resetTimer() {
+                stopTimer();
+                const minutes = parseInt(timerMinutesInput.value, 10) || 5;
+                timerDisplay.textContent = `${String(minutes).padStart(2, '0')}:00`;
+                timerDuration = 0;
+            }
+
+            startTimerBtn.addEventListener('click', startTimer);
+            resetTimerBtn.addEventListener('click', resetTimer);
+
+            // Update timer display when input changes
+            timerMinutesInput.addEventListener('input', () => {
+                if (!isTimerRunning) {
+                    const minutes = parseInt(timerMinutesInput.value, 10) || 5;
+                    timerDisplay.textContent = `${String(minutes).padStart(2, '0')}:00`;
+                }
+            });
+
+            // Weather functionality
+            function fetchWeather() {
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(position => {
+                        const lat = position.coords.latitude;
+                        const lon = position.coords.longitude;
+                        const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${WEATHER_API_KEY}&units=metric`;
+
+                        fetch(url)
+                            .then(response => response.json())
+                            .then(data => {
+                                const city = data.name;
+                                const temp = data.main.temp;
+                                const description = data.weather[0].description;
+                                const icon = data.weather[0].icon;
+
+                                weatherContent.innerHTML = `
+                                    <h3>${city}</h3>
+                                    <img src="https://openweathermap.org/img/wn/${icon}@2x.png" alt="Weather icon">
+                                    <p>${description}</p>
+                                    <p>${temp}°C</p>
+                                `;
+                            })
+                            .catch(error => {
+                                console.error("Error fetching weather data:", error);
+                                weatherContent.innerHTML = "<p>Could not fetch weather.</p>";
+                            });
+                    });
+                } else {
+                    weatherContent.innerHTML = "<p>Geolocation not supported.</p>";
+                }
+            }
+
+            // Function to handle the start button click
+            function startApp() {
+                initialMessage.style.display = 'none';
+                attachOrientationListeners();
+                // Initial detection after a small delay
+                setTimeout(detectOrientation, 500);
+            }
+
+            // Add event listener to the start button
+            startAppBtn.addEventListener('click', startApp);
+        });
+    </script>
+</body>
+</html>
