@@ -262,17 +262,18 @@
 
             let lastOrientation = null;
 
-            function isPortraitUp(beta, gamma) { return Math.abs(beta) < 15 && Math.abs(gamma) < 15; }
-            function isPortraitDown(beta, gamma) { return Math.abs(beta + 180) < 15 || Math.abs(beta - 180) < 15 && Math.abs(gamma) < 15; }
-            function isLandscapeRight(beta, gamma) { return Math.abs(beta - 90) < 15 && Math.abs(gamma) < 15; }
-            function isLandscapeLeft(beta, gamma) { return Math.abs(beta + 90) < 15 && Math.abs(gamma) < 15; }
+            function isPortraitUp(beta, gamma) { return Math.abs(beta) < 20 && Math.abs(gamma) < 20; }
+            function isPortraitDown(beta, gamma) { return (Math.abs(beta - 180) < 20 || Math.abs(beta + 180) < 20) && Math.abs(gamma) < 20; }
+            function isLandscapeRight(beta, gamma) { return Math.abs(beta - 90) < 20 && Math.abs(gamma) < 20; }
+            function isLandscapeLeft(beta, gamma) { return Math.abs(beta + 90) < 20 && Math.abs(gamma) < 20; }
             function isFaceUp(beta, gamma) { return Math.abs(beta - 90) < 15 && Math.abs(gamma) < 15; }
 
             function detectOrientation(event) {
                 const beta = event ? event.beta : 0;
                 const gamma = event ? event.gamma : 0;
                 let currentOrientation;
-
+                
+                // Prioritize the most specific/ambiguous check first
                 if (isFaceUp(beta, gamma)) {
                     currentOrientation = 'face-up';
                 } else if (isPortraitUp(beta, gamma)) {
