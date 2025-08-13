@@ -217,7 +217,6 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // UI elements
             const initialMessage = document.getElementById('initial-message');
             const startAppBtn = document.getElementById('start-app-btn');
             const alarmClock = document.getElementById('alarm-clock');
@@ -227,13 +226,11 @@
             const pomodoro = document.getElementById('pomodoro');
             const orientationDebug = document.getElementById('orientation-debug');
 
-            // Alarm Clock elements
             const alarmTimeInput = document.getElementById('alarm-time');
             const setAlarmBtn = document.getElementById('set-alarm-btn');
             const alarmStatus = document.getElementById('alarm-status');
             let alarmTimeout;
 
-            // Stopwatch elements
             const stopwatchDisplay = document.getElementById('stopwatch-display');
             const startStopwatchBtn = document.getElementById('start-stopwatch-btn');
             const resetStopwatchBtn = document.getElementById('reset-stopwatch-btn');
@@ -241,7 +238,6 @@
             let stopwatchTime = 0;
             let isStopwatchRunning = false;
             
-            // Timer elements
             const timerDisplay = document.getElementById('timer-display');
             const timerMinutesInput = document.getElementById('timer-minutes');
             const startTimerBtn = document.getElementById('start-timer-btn');
@@ -250,101 +246,60 @@
             let timerDuration;
             let isTimerRunning = false;
 
-            // Pomodoro elements
             const pomodoroDisplay = document.getElementById('pomodoro-display');
             const pomodoroStatus = document.getElementById('pomodoro-status');
             const startPomodoroBtn = document.getElementById('start-pomodoro-btn');
             const resetPomodoroBtn = document.getElementById('reset-pomodoro-btn');
-            const WORK_DURATION = 25 * 60; // 25 minutes
-            const BREAK_DURATION = 5 * 60;  // 5 minutes
+            const WORK_DURATION = 25 * 60;
+            const BREAK_DURATION = 5 * 60;
             let pomodoroInterval;
             let pomodoroTime = WORK_DURATION;
             let isPomodoroRunning = false;
             let isWorkSession = true;
 
-            // Weather API
             const WEATHER_API_KEY = "20540bfb70f5c03fec99ad5d4a37783b";
             const weatherContent = document.getElementById('weather-content');
 
-            // Orientation detection
             let lastOrientation = null;
-            let orientTimer = null;
-            const ORIENT_DEBOUNCE = 300;
 
-            function getOrientation() {
-                // Try multiple methods for better compatibility
-                if (screen.orientation && screen.orientation.angle !== undefined) {
-                    const angle = screen.orientation.angle;
-                    if (angle === 0) return 'portrait-upright';
-                    if (angle === 90) return 'landscape-right';
-                    if (angle === 180) return 'portrait-upsidedown';
-                    if (angle === 270) return 'landscape-left';
-                }
-
-                // Fallback to window.orientation (legacy)
-                const angle = window.orientation;
-                if (angle === 0) return 'portrait-upright';
-                if (angle === 90) return 'landscape-right';
-                if (angle === 180 || angle === -180) return 'portrait-upsidedown';
-                if (angle === -90 || angle === 270) return 'landscape-left';
-
-                // CSS media query fallback
-                if (window.matchMedia("(orientation: portrait)").matches) {
-                    return 'portrait-upright';
-                }
-                if (window.matchMedia("(orientation: landscape)").matches) {
-                    return 'landscape-right';
-                }
-
-                return 'unknown';
-            }
-
-            function isFaceUp(beta, gamma) {
-                // Beta is the front-to-back tilt, Gamma is the left-to-right tilt
-                // A device lying flat on a table will have a beta close to 90 and gamma close to 0.
-                const isBetaFlat = (beta > 80 && beta < 100);
-                const isGammaFlat = (gamma > -10 && gamma < 10);
-                return isBetaFlat && isGammaFlat;
-            }
+            function isPortraitUp(beta, gamma) { return Math.abs(beta) < 15 && Math.abs(gamma) < 15; }
+            function isPortraitDown(beta, gamma) { return Math.abs(beta + 180) < 15 || Math.abs(beta - 180) < 15 && Math.abs(gamma) < 15; }
+            function isLandscapeRight(beta, gamma) { return Math.abs(beta - 90) < 15 && Math.abs(gamma) < 15; }
+            function isLandscapeLeft(beta, gamma) { return Math.abs(beta + 90) < 15 && Math.abs(gamma) < 15; }
+            function isFaceUp(beta, gamma) { return Math.abs(beta - 90) < 15 && Math.abs(gamma) < 15; }
 
             function detectOrientation(event) {
-                const orientation = getOrientation();
                 const beta = event ? event.beta : 0;
                 const gamma = event ? event.gamma : 0;
-                const alpha = event ? event.alpha : 0;
+                let currentOrientation;
 
-                let currentOrientation = orientation;
-                if (window.DeviceOrientationEvent && isFaceUp(beta, gamma)) {
+                if (isFaceUp(beta, gamma)) {
                     currentOrientation = 'face-up';
+                } else if (isPortraitUp(beta, gamma)) {
+                    currentOrientation = 'portrait-upright';
+                } else if (isPortraitDown(beta, gamma)) {
+                    currentOrientation = 'portrait-upsidedown';
+                } else if (isLandscapeRight(beta, gamma)) {
+                    currentOrientation = 'landscape-right';
+                } else if (isLandscapeLeft(beta, gamma)) {
+                    currentOrientation = 'landscape-left';
+                } else {
+                    currentOrientation = 'unknown';
                 }
                 
-                console.log('Detected orientation:', currentOrientation);
-                orientationDebug.textContent = `Orientation: ${currentOrientation}`;
+                orientationDebug.textContent = `Orientation: ${currentOrientation} (beta: ${beta.toFixed(2)}, gamma: ${gamma.toFixed(2)})`;
                 
                 if (currentOrientation !== 'unknown' && currentOrientation !== lastOrientation) {
-                    console.log('Switching from', lastOrientation, 'to', currentOrientation);
                     lastOrientation = currentOrientation;
                     updateUI(currentOrientation);
                 }
             }
 
             function attachOrientationListeners() {
-                if (screen.orientation) {
-                    screen.orientation.addEventListener('change', () => {
-                        clearTimeout(orientTimer);
-                        orientTimer = setTimeout(detectOrientation, ORIENT_DEBOUNCE);
-                    });
-                }
-                window.addEventListener('orientationchange', () => {
-                    clearTimeout(orientTimer);
-                    orientTimer = setTimeout(detectOrientation, ORIENT_DEBOUNCE);
-                });
-                window.addEventListener('resize', () => {
-                    clearTimeout(orientTimer);
-                    orientTimer = setTimeout(detectOrientation, ORIENT_DEBOUNCE);
-                });
                 if (window.DeviceOrientationEvent) {
                     window.addEventListener('deviceorientation', detectOrientation, true);
+                } else {
+                    orientationDebug.textContent = "Device Orientation not supported.";
                 }
             }
 
@@ -385,7 +340,6 @@
                 }
             }
             
-            // Alarm Clock functionality
             setAlarmBtn.addEventListener('click', () => {
                 if (!alarmTimeInput.value) {
                     alarmStatus.textContent = 'Please set a time!';
@@ -407,7 +361,6 @@
                 }, timeToAlarm);
             });
 
-            // Stopwatch functionality
             function updateStopwatch() {
                 stopwatchTime++;
                 const h = String(Math.floor(stopwatchTime / 3600)).padStart(2, '0');
@@ -448,7 +401,6 @@
 
             resetStopwatchBtn.addEventListener('click', resetStopwatch);
             
-            // Timer functionality
             function updateTimer() {
                 if (timerDuration <= 0) {
                     alert('⏰ TIMER FINISHED!');
@@ -497,7 +449,6 @@
                 }
             });
 
-            // Pomodoro Timer functionality
             function formatTime(seconds) {
                 const min = Math.floor(seconds / 60);
                 const sec = seconds % 60;
@@ -551,7 +502,6 @@
             startPomodoroBtn.addEventListener('click', startPomodoro);
             resetPomodoroBtn.addEventListener('click', resetPomodoro);
 
-            // Weather functionality
             function fetchWeather() {
                 if (navigator.geolocation) {
                     navigator.geolocation.getCurrentPosition(position => {
@@ -587,7 +537,6 @@
             function startApp() {
                 initialMessage.style.display = 'none';
                 attachOrientationListeners();
-                setTimeout(() => detectOrientation(), 500);
                 startAppBtn.removeEventListener('click', startApp);
             }
 
